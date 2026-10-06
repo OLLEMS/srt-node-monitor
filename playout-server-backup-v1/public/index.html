@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Playout — Controle</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <style>
+    body { font-family: system-ui; background:#111; color:#eee; margin:20px }
+    video { width:640px; background:#000; display:block; margin-bottom:12px }
+    .ok { color:#4ade80 } .bad { color:#f87171 } .warn { color:#facc15 }
+    button { padding:8px 14px; margin-right:6px }
+  </style>
+</head>
+<body>
+  <h2>Preview (já tratado)</h2>
+  <video id="v" controls muted autoplay></video>
+
+  <h2>Configuração de Entrada</h2>
+  <div style="margin-bottom: 15px;">
+    <input type="text" id="srtUrl" placeholder="srt://0.0.0.0:9000?mode=listener&latency=2000000" style="width: 400px; padding: 8px;" value="srt://0.0.0.0:9000?mode=listener&latency=2000000" />
+    <span id="urlError" class="bad" style="display:none; margin-left:10px;">URL SRT inválida! (ex: srt://ip:porta?mode=...)</span>
+  </div>
+
+  <h2>Status</h2>
+  <pre id="st">conectando...</pre>
+
+  <button id="btnStart" onclick="startStream()">Iniciar</button>
+  <button id="btnStop" onclick="fetch('/api/stop',{method:'POST'})">Parar</button>
+
+  <script>
+    function startStream() {
+      const urlInput = document.getElementById('srtUrl').value.trim();
+      const errorSpan = document.getElementById('urlError');
+      
+      const srtRegex = /^srt:\/\/[a-zA-Z0-9.-]+:\d+(\?.*)?$/;
+      if (!srtRegex.test(urlInput)) {
+        errorSpan.style.display = 'inline';
+        return;
+      }
+      errorSpan.style.display = 'none';
+
+      fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputUrl: urlInput })
+      });
+    }
+
+    const src = `http://${location.hostname}:8888/live/index.m3u8`;
+    const v = document.getElementById('v');
+    if (Hls.isSupported()) { const h = new Hls({ lowLatencyMode:true }); h.loadSource(src); h.attachMedia(v); }
+    else v.src = src;
+
+    const ws = new WebSocket(`ws://${location.host}`);
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+
+    ws.onmessage = (e) => {
+      const s = JSON.parse(e.data);
+      document.getElementById('st').textContent =
+        `status:   ${s.status}\n` +
+        `reinícios:${s.restarts}\n` +
+        `speed:    ${s.speed || 'N/A'}\n` +
+        `freeze:   ${s.freeze}\n` +
+        `black:    ${s.black}`;
+
+      // Feedback visual nos botões
+      if (s.status === 'stopped') {
+        btnStart.style.backgroundColor = '#4ade80'; // Verde
+        btnStart.style.color = '#111';
+        btnStart.disabled = false;
+        
+        btnStop.style.backgroundColor = '#555'; // Cinza
+        btnStop.style.color = '#aaa';
+        btnStop.disabled = true;
+      } else {
+        btnStart.style.backgroundColor = '#555'; // Cinza
+        btnStart.style.color = '#aaa';
+        btnStart.innerText = s.status === 'starting' || s.status === 'restarting' ? 'Conectando...' : 'Rodando';
+        
+        btnStop.style.backgroundColor = '#f87171'; // Vermelho
+        btnStop.style.color = '#111';
+        btnStop.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

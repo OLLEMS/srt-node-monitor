@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <title>Playout — Controle</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <style>
+    body { font-family: system-ui; background:#111; color:#eee; margin:20px; max-width: 800px; }
+    video { width:100%; background:#000; display:block; margin-bottom:12px; border-radius: 8px; }
+    .ok { color:#4ade80 } .bad { color:#f87171 } .warn { color:#facc15 }
+    button { padding:10px 16px; margin-right:6px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      background: #1e1e24;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #333;
+    }
+    .stat-box {
+      background: #2a2a35;
+      padding: 15px;
+      border-radius: 6px;
+      text-align: center;
+      border-left: 4px solid #4ade80;
+    }
+    .stat-title {
+      font-size: 12px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #eee;
+    }
+    .stat-warning { border-left-color: #facc15; }
+    .stat-danger { border-left-color: #f87171; }
+    
+    .player-container {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16/9;
+      background: #000;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 2px solid #333;
+    }
+    .color-bars {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: repeating-linear-gradient(90deg, 
+        #c0c0c0 0 14.28%, 
+        #c0c000 14.28% 28.56%, 
+        #00c0c0 28.56% 42.84%, 
+        #00c000 42.84% 57.12%, 
+        #c000c0 57.12% 71.4%, 
+        #c00000 71.4% 85.68%, 
+        #0000c0 85.68% 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .color-bars-text {
+      background: rgba(0,0,0,0.8);
+      padding: 15px 30px;
+      border-radius: 8px;
+      color: white;
+      font-weight: bold;
+      letter-spacing: 2px;
+      font-size: 1.5rem;
+    }
+    video {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: none;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <h2>Preview (já tratado)</h2>
+  
+  <div class="player-container">
+    <div id="placeholder" class="color-bars">
+      <div class="color-bars-text">AGUARDANDO SINAL SRT</div>
+    </div>
+    <video id="v" controls muted autoplay></video>
+  </div>
+
+  <h2>Estatísticas de Playout</h2>
+  <div class="stats-grid">
+    <div class="stat-box" id="box-speed">
+      <div class="stat-title">Velocidade</div>
+      <div class="stat-value" id="val-speed">-</div>
+    </div>
+    <div class="stat-box stat-danger" id="box-drop">
+      <div class="stat-title">Pacotes Descartados</div>
+      <div class="stat-value" id="val-drop">0</div>
+    </div>
+    <div class="stat-box stat-warning" id="box-dup">
+      <div class="stat-title">Quadros Duplicados (Sync)</div>
+      <div class="stat-value" id="val-dup">0</div>
+    </div>
+  </div>
+
+  <h2>Configuração de Entrada</h2>
+  <div style="margin-bottom: 15px;">
+    <input type="text" id="srtUrl" placeholder="srt://0.0.0.0:9000?mode=listener" style="width: 400px; padding: 10px; border-radius:4px; border:1px solid #444; background:#222; color:#fff;" />
+    <span id="urlError" class="bad" style="display:none; margin-left:10px;">URL SRT inválida!</span>
+  </div>
+
+  <div style="margin-bottom: 20px;">
+    <button id="btnStart" onclick="startStream()">Iniciar Stream</button>
+    <button id="btnStop" onclick="stopStream()">Parar Stream</button>
+    <button id="btnHdmi" onclick="toggleHdmi()" style="background:#3b82f6; color:#fff; float:right;">Ligar Saída HDMI (ffplay)</button>
+  </div>
+
+  <h2>Log de Sistema</h2>
+  <pre id="st" style="background:#000; padding:10px; border-radius:4px; color:#aaa;">conectando...</pre>
+
+  <script>
+    let isHdmiOn = false;
+
+    function toggleHdmi() {
+      isHdmiOn = !isHdmiOn;
+      fetch('/api/hdmi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enable: isHdmiOn })
+      });
+    }
+
+    function startStream() {
+      const urlInput = document.getElementById('srtUrl').value.trim();
+      const errorSpan = document.getElementById('urlError');
+      const srtRegex = /^srt:\/\/[a-zA-Z0-9.-]+:\d+(\?.*)?$/;
+      if (!srtRegex.test(urlInput)) {
+        errorSpan.style.display = 'inline';
+        return;
+      }
+      errorSpan.style.display = 'none';
+      fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputUrl: urlInput })
+      });
+      setTimeout(initPlayer, 1000);
+    }
+
+    function stopStream() {
+      fetch('/api/stop', { method: 'POST' });
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+    }
+
+    const src = `http://${location.hostname}:8888/live/index.m3u8`;
+    const v = document.getElementById('v');
+    let hls = null;
+
+    function initPlayer() {
+      if (hls) { hls.destroy(); hls = null; }
+      
+      const noCacheSrc = src + '?t=' + Date.now();
+      
+      if (Hls.isSupported()) {
+        hls = new Hls({ lowLatencyMode: true });
+        hls.loadSource(noCacheSrc);
+        hls.attachMedia(v);
+        
+        hls.on(Hls.Events.MANIFEST_PARSED, function() {
+          v.play().catch(e => console.log("Autoplay prevented:", e));
+        });
+        
+        hls.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) {
+            switch (data.type) {
+              case Hls.ErrorTypes.NETWORK_ERROR:
+                // Cache-busting para evitar que o navegador memorize o erro 404
+                setTimeout(initPlayer, 2000);
+                break;
+              case Hls.ErrorTypes.MEDIA_ERROR:
+                hls.recoverMediaError();
+                break;
+              default:
+                setTimeout(initPlayer, 2000);
+                break;
+            }
+          }
+        });
+      } else {
+        v.src = noCacheSrc;
+        v.play().catch(e => console.log("Autoplay prevented:", e));
+      }
+    }
+
+    const ws = new WebSocket(`ws://${location.host}`);
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const btnHdmi = document.getElementById('btnHdmi');
+    const placeholder = document.getElementById('placeholder');
+
+    ws.onmessage = (e) => {
+      const s = JSON.parse(e.data);
+      
+      document.getElementById('st').textContent =
+        `status:   ${s.status}\n` +
+        `reinícios:${s.restarts}\n` +
+        `bitrate:  ${s.bitrate || 'N/A'}\n` +
+        `freeze:   ${s.freeze}\n` +
+        `black:    ${s.black}`;
+
+      document.getElementById('val-speed').textContent = s.speed || '-';
+      document.getElementById('val-drop').textContent = s.drop || '0';
+      document.getElementById('val-dup').textContent = s.dup || '0';
+      
+      isHdmiOn = s.hdmi;
+      btnHdmi.innerText = isHdmiOn ? 'Desligar Saída HDMI' : 'Ligar Saída HDMI (ffplay)';
+      btnHdmi.style.backgroundColor = isHdmiOn ? '#ef4444' : '#3b82f6';
+
+      if (s.status === 'stopped') {
+        // Exibir Color Bars
+        v.style.display = 'none';
+        placeholder.style.display = 'flex';
+
+        btnStart.style.backgroundColor = '#4ade80';
+        btnStart.style.color = '#111';
+        btnStart.innerText = 'Iniciar Stream';
+        btnStart.disabled = false;
+        
+        btnStop.style.backgroundColor = '#555';
+        btnStop.style.color = '#aaa';
+        btnStop.disabled = true;
+      } else {
+        // Exibir Vídeo
+        v.style.display = 'block';
+        placeholder.style.display = 'none';
+
+        btnStart.style.backgroundColor = '#555';
+        btnStart.style.color = '#aaa';
+        btnStart.innerText = s.status === 'starting' || s.status === 'restarting' ? 'Conectando...' : 'Trocar SRT';
+        
+        btnStop.style.backgroundColor = '#f87171';
+        btnStop.style.color = '#111';
+        btnStop.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>

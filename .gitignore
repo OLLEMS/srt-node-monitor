@@ -1,0 +1,5 @@
+node_modules/
+playout-server/mediamtx/mediamtx
+playout-server-backup-v1/mediamtx/mediamtx
+*.log
+.DS_Store
