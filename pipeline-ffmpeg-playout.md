@@ -555,36 +555,58 @@ Para que o `pkg` saiba que precisa incluir a pasta `public/` no executável, adi
 
 *Importante:* Como estamos usando `"type": "module"`, o `pkg` tem algumas ressalvas com ESM puro em versões antigas. Para máxima compatibilidade no empacotamento, você pode rodar o código com o Node 20 (que tem melhor suporte).
 
-### 14.3 Gerando o executável
-Na pasta `playout-server`, rode:
+### 14.3 Gerando o AppImage Portátil e Completo (Linux)
+
+Para distribuir o seu servidor como um **aplicativo portátil** no Linux, que contém o Node.js, FFmpeg, FFplay e MediaMTX embutidos (sem o cliente precisar instalar **nada**), usamos o **linuxdeploy** e o **appimagetool**.
+
+#### Passo a Passo de Compilação:
+Baixe as ferramentas necessárias:
 ```bash
-# Gera os executáveis para Windows, Linux e macOS
-pkg .
+wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
+chmod +x linuxdeploy
+
+wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+chmod +x appimagetool
 ```
 
-Isso vai criar 3 arquivos:
-- `playout-server-linux` (que pode ser distribuído para Linux).
-- `playout-server-win.exe` (para Windows).
-- `playout-server-macos` (para Mac).
+Agrupe tudo na pasta `AppDir`:
+```bash
+# 1. Rastreia e copia os binários e TODAS as bibliotecas (.so) nativas do seu sistema
+./linuxdeploy --appdir AppDir -e /usr/bin/node -e /usr/bin/ffmpeg -e /usr/bin/ffplay
 
-### 14.4 Transformando o Linux bin em .AppImage (Opcional)
-Se você precisa especificamente de um `.AppImage`, você pode pegar o binário `playout-server-linux` gerado pelo `pkg` e empacotá-lo usando a ferramenta `appimagetool`.
-1. Crie uma estrutura de diretórios (`AppDir`):
-   ```bash
-   mkdir -p Playout.AppDir/usr/bin
-   cp playout-server-linux Playout.AppDir/usr/bin/playout
-   ```
-2. Crie um arquivo `Playout.AppDir/AppRun`:
-   ```bash
-   #!/bin/sh
-   HERE="$(dirname "$(readlink -f "${0}")")"
-   exec "${HERE}/usr/bin/playout" "$@"
-   ```
-3. Torne o `AppRun` executável: `chmod +x Playout.AppDir/AppRun`.
-4. Adicione um `.desktop` e um ícone na raiz do `AppDir`.
-5. Baixe o `appimagetool` e rode: `./appimagetool-x86_64.AppImage Playout.AppDir`.
+# 2. Copia o projeto e o MediaMTX para dentro da estrutura portátil
+cp -r playout-server AppDir/usr/share/playout-server
+cp playout-server/mediamtx/mediamtx AppDir/usr/bin/mediamtx
 
-> **Atenção:** O binário gerado terá o Node.js e o frontend, **mas ele não contém o MediaMTX nem o FFmpeg**. Você ainda precisará enviar esses dois executáveis (`mediamtx` e `ffmpeg`) junto com o seu `.exe`/`.AppImage` ou garantir que estejam instalados e no `PATH` do sistema do cliente.
+# 3. Cria um ícone e o arquivo Desktop
+echo '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><circle cx="128" cy="128" r="120" fill="red"/></svg>' > AppDir/srt-playout.svg
+cp AppDir/srt-playout.svg AppDir/.DirIcon
+
+cat << 'EOF' > AppDir/srt-playout.desktop
+[Desktop Entry]
+Name=SRT-Playout
+Exec=AppRun
+Icon=srt-playout
+Type=Application
+Categories=AudioVideo;
+EOF
+
+# 4. Cria o script de inicialização universal
+cat << 'EOF' > AppDir/AppRun
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "${0}")")"
+export PATH="${HERE}/usr/bin:${PATH}"
+export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+cd "${HERE}/usr/share/playout-server"
+exec node server.js "$@"
+EOF
+chmod +x AppDir/AppRun
+
+# 5. Gera o pacote final compactado
+./appimagetool AppDir SRT_Playout-x86_64.AppImage
+```
+
+Ao final, você terá um arquivo **`SRT_Playout-x86_64.AppImage`** com cerca de 130MB. Basta copiá-lo para qualquer máquina Linux (até mesmo em pen-drives) e rodar ` ./SRT_Playout-x86_64.AppImage`. Ele já tem TUDO o que precisa!
 
 ---
 
