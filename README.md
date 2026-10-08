@@ -6,7 +6,7 @@ Desenvolvido para gerenciar as quedas naturais de conexões sem fio sem derrubar
 
 ---
 
-## 🚀 Instalação Rápida e Profissional (Linux)
+## 🚀 Quick Install
 
 A maneira recomendada e mais robusta de instalar este servidor em qualquer máquina Ubuntu/Debian é através do nosso Script de Instalação Universal.
 
