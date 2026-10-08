@@ -555,102 +555,31 @@ Para que o `pkg` saiba que precisa incluir a pasta `public/` no executável, adi
 
 *Importante:* Como estamos usando `"type": "module"`, o `pkg` tem algumas ressalvas com ESM puro em versões antigas. Para máxima compatibilidade no empacotamento, você pode rodar o código com o Node 20 (que tem melhor suporte).
 
-### 14.3 Gerando o AppImage Portátil e Completo (Linux)
+## 3. Instalação Profissional Automática (Recomendado)
 
-Para distribuir o seu servidor como um **aplicativo portátil** no Linux, que contém o Node.js, FFmpeg, FFplay e MediaMTX embutidos (sem o cliente precisar instalar **nada**), usamos o **linuxdeploy** e o **appimagetool**.
+Aplicativos Linux nativos raramente usam AppImage para servidores de fundo contínuos. A forma padrão e mais robusta (usada por bancos de dados e painéis) é ter um **Script de Instalação** que baixa as dependências (`apt install`), clona o repositório, instala na pasta oficial `/opt/` e cria os daemons do sistema automaticamente.
 
-#### Passo a Passo de Compilação:
-Baixe as ferramentas necessárias:
+### Como instalar do zero em qualquer Ubuntu/Debian:
+Basta rodar **um único comando** no terminal do computador de destino:
+
 ```bash
-wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage -O linuxdeploy
-chmod +x linuxdeploy
-
-wget https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
-chmod +x appimagetool
+curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/install.sh | sudo bash -
 ```
 
-Agrupe tudo na pasta `AppDir`:
-```bash
-# 1. Rastreia e copia os binários e TODAS as bibliotecas (.so) nativas do seu sistema
-./linuxdeploy --appdir AppDir -e /usr/bin/node -e /usr/bin/ffmpeg -e /usr/bin/ffplay
+### O que esse comando faz por baixo dos panos?
+1. Adiciona o repositório oficial do Node.js (NodeSource) e instala o **Node 20**.
+2. Roda `apt install -y ffmpeg git curl wget` para garantir que as ferramentas nativas de vídeo estejam presentes.
+3. Clona a versão mais recente do código deste GitHub para a pasta protegida `/opt/srt-playout`.
+4. Baixa automaticamente o motor de aceleração de vídeo (`MediaMTX`) do repositório oficial.
+5. Instala os pacotes do Node.js (`npm install`).
+6. Cria dois serviços imortais no **Systemd** (`srt-mediamtx` e `srt-webui`), que ligam junto com a máquina.
+7. Inicia a aplicação na porta `3000`.
 
-# 2. Copia o projeto e o MediaMTX para dentro da estrutura portátil
-cp -r playout-server AppDir/usr/share/playout-server
-cp playout-server/mediamtx/mediamtx AppDir/usr/bin/mediamtx
+### Comandos de Manutenção (Serviço)
+Após a instalação, você gerencia tudo pelo próprio sistema Linux:
+- **Ver os logs da interface web:** `sudo journalctl -u srt-webui -f`
+- **Ver os logs da conexão SRT:** `sudo journalctl -u srt-mediamtx -f`
+- **Parar a aplicação:** `sudo systemctl stop srt-webui`
+- **Reiniciar a aplicação:** `sudo systemctl restart srt-webui`
 
-# 3. Cria um ícone e o arquivo Desktop
-echo '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><circle cx="128" cy="128" r="120" fill="red"/></svg>' > AppDir/srt-playout.svg
-cp AppDir/srt-playout.svg AppDir/.DirIcon
-
-cat << 'EOF' > AppDir/srt-playout.desktop
-[Desktop Entry]
-Name=SRT-Playout
-Exec=AppRun
-Icon=srt-playout
-Type=Application
-Categories=AudioVideo;
-EOF
-
-# 4. Cria o script de inicialização universal
-cat << 'EOF' > AppDir/AppRun
-#!/bin/bash
-HERE="$(dirname "$(readlink -f "${0}")")"
-export PATH="${HERE}/usr/bin:${PATH}"
-export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-cd "${HERE}/usr/share/playout-server"
-exec node server.js "$@"
-EOF
-chmod +x AppDir/AppRun
-
-# 5. Gera o pacote final compactado
-./appimagetool AppDir SRT_Playout-x86_64.AppImage
-```
-
-Ao final, você terá um arquivo **`SRT_Playout-x86_64.AppImage`** com cerca de 130MB. Basta copiá-lo para qualquer máquina Linux (até mesmo em pen-drives) e rodar ` ./SRT_Playout-x86_64.AppImage`. Ele já tem TUDO o que precisa!
-
----
-
-## 4. Executando em Segundo Plano (Serviço de Produção)
-
-Para manter o `playout-server` (e o MediaMTX) rodando continuamente em segundo plano, sem depender de um terminal aberto, você tem duas opções principais:
-
-### 4.1. PM2 (Ecosistema Node.js)
-Como você mencionou, o PM2 é excelente, extremamente fácil e já gerencia restarts automáticos para aplicações Node.
-Instale o PM2 globalmente:
-```bash
-sudo npm install -g pm2
-```
-Inicie a aplicação e salve na inicialização:
-```bash
-pm2 start server.js --name "srt-playout"
-pm2 save
-pm2 startup
-```
-
-### 4.2. Systemd (Padrão Nativo do Linux - O mais moderno)
-Se você busca o que há de mais "moderno" e robusto em termos de infraestrutura Linux pura (sem precisar instalar o PM2 no host do cliente), criar um **Service do Systemd** é o padrão absoluto da indústria. Ele gerencia o processo direto pelo Kernel e inicializa no boot.
-
-Crie o arquivo: `sudo nano /etc/systemd/system/srt-playout.service`
-```ini
-[Unit]
-Description=SRT Playout WebUI
-After=network.target
-
-[Service]
-Type=simple
-User=SEU_USUARIO
-WorkingDirectory=/caminho/para/srt-server/playout-server
-ExecStart=/usr/bin/node server.js
-Restart=on-failure
-RestartSec=3
-
-[Install]
-WantedBy=multi-user.target
-```
-Ative e inicie:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable srt-playout
-sudo systemctl start srt-playout
-```
-Acesse os logs com: `sudo journalctl -u srt-playout -f`
+Esta abordagem elimina problemas de compatibilidade (que o AppImage tem com diferentes versões do `glibc`) pois utiliza os binários C++ e FFmpeg compilados nativamente para a exata versão do sistema operacional do cliente.
