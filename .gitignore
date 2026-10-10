@@ -1,6 +1,6 @@
 node_modules/
 playout-server/mediamtx/mediamtx
-playout-server-backup-v1/mediamtx/mediamtx
+playout-server/config.json
+playout-server-backup-*/
 *.log
 .DS_Store
-playout-server-backup-v1/

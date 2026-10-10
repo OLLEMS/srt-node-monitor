@@ -12,9 +12,11 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # 2. Instalar Node.js 20 e dependências nativas
-echo "[1/6] Atualizando repositórios e instalando FFmpeg e Git..."
+echo "[1/6] Atualizando repositórios e instalando dependências (FFmpeg, GPU drivers, Git)..."
 apt-get update -y
 apt-get install -y curl git ffmpeg wget
+# Tenta instalar drivers de aceleração gráfica por hardware (Intel/VAAPI)
+apt-get install -y intel-media-va-driver-non-free 2>/dev/null || apt-get install -y intel-media-va-driver 2>/dev/null || true
 
 echo "[2/6] Instalando Node.js (Repositório Oficial NodeSource)..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
@@ -41,6 +43,8 @@ wget -qO mediamtx.tar.gz "https://github.com/bluenviron/mediamtx/releases/downlo
 tar -xzf mediamtx.tar.gz mediamtx mediamtx.yml
 rm mediamtx.tar.gz
 chmod +x mediamtx
+# HLS padrão (fMP4, segmentos de 1s) em vez de Low-Latency: buffer estável no navegador, sem engasgos
+sed -i 's/^hlsVariant: lowLatency/hlsVariant: fmp4/' mediamtx.yml
 
 # 5. Instalar pacotes NPM
 echo "[5/6] Instalando pacotes do Node.js..."
@@ -88,6 +92,8 @@ systemctl daemon-reload
 systemctl enable srt-mediamtx srt-webui
 systemctl restart srt-mediamtx srt-webui
 
+chmod +x $INSTALL_DIR/*.sh 2>/dev/null || true
+
 echo "============================================="
 echo " Instalação Concluída com Sucesso! 🚀"
 echo "============================================="
@@ -97,3 +103,5 @@ echo "Comandos úteis:"
 echo "  - Ver logs do Node: sudo journalctl -u srt-webui -f"
 echo "  - Ver logs do SRT:  sudo journalctl -u srt-mediamtx -f"
 echo "  - Reiniciar tudo:   sudo systemctl restart srt-webui"
+echo "  - Atualizar versão: sudo /opt/srt-playout/update.sh"
+echo "  - Desinstalar tudo: sudo /opt/srt-playout/uninstall.sh"

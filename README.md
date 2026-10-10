@@ -1,72 +1,116 @@
-# 📡 SRT Playout Node Monitor
+# 📡 SRT Playout Pro & Node Monitor
 
-Um servidor robusto de **Ingest, Playout e Monitoramento** de transmissões SRT de baixa latência, projetado para estabilidade extrema em ambientes de broadcast e redes instáveis (como Wi-Fi ou 4G/5G).
+Servidor profissional de **Ingest, Tratamento de Sinal, Playout e Monitoramento** para transmissões SRT de baixa latência. Projetado com padrões de engenharia de broadcast para estabilidade ininterrupta em redes desafiadoras (como Wi-Fi, 4G e 5G).
 
-Desenvolvido para gerenciar as quedas naturais de conexões sem fio sem derrubar o playout final, utilizando **FFmpeg**, **MediaMTX** e **Node.js**.
+O sistema atua como uma **ponte de estabilização**: recebe múltiplos fluxos SRT, aplica correção de jitter, reordenação de pacotes e entrega um sinal de programa com **Genlock Virtual em 1080p a 59.94 FPS CFR**, acelerado por **GPU**.
 
 ---
 
-## 🚀 Quick Install
+## ⚡ Instalação, Atualização e Desinstalação (Linux)
 
-A maneira recomendada e mais robusta de instalar este servidor em qualquer máquina Ubuntu/Debian é através do nosso Script de Instalação Universal.
-
-Basta rodar **um único comando** no terminal (requer privilégios de `root`/`sudo`):
+### 🚀 1. Instalação Automática (One-Liner)
+Para instalar o servidor em qualquer máquina Ubuntu/Debian com todos os serviços configurados no **Systemd**:
 
 ```bash
 curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/install.sh | sudo bash -
 ```
 
-### O que este script faz por trás dos panos?
-1. Adiciona o repositório oficial do Node.js (NodeSource) e instala o **Node 20**.
-2. Instala dependências vitais de sistema (`ffmpeg`, `git`, `curl`, `wget`).
-3. Clona este repositório para o diretório padrão de servidores: `/opt/srt-playout`.
-4. Baixa e descompacta o binário do **MediaMTX** (motor de conversão de vídeo RTSP/HLS de altíssimo desempenho).
-5. Instala os pacotes necessários (`npm install`).
-6. Configura a inicialização automática, criando dois serviços ("daemons") no **Systemd**.
-7. Inicia automaticamente a WebUI na porta `3000`.
+O instalador automático:
+- Instala Node.js 20 LTS e dependências nativas (`ffmpeg`, `git`, `curl`, `wget`).
+- Instala drivers de aceleração por GPU (`intel-media-va-driver-non-free`).
+- Clona a aplicação para `/opt/srt-playout`.
+- Baixa e configura o binário de alto desempenho do **MediaMTX** (RTSP/HLS fMP4).
+- Configura e ativa os serviços do sistema (`srt-webui.service` e `srt-mediamtx.service`).
+- Inicia o painel na porta `3000`.
 
 ---
 
-## 🛠️ Como Funciona e Tratamento do Protocolo SRT
+### 🔄 2. Atualização para Nova Versão
+Para atualizar uma instalação existente sem perder suas configurações locais:
 
-O grande diferencial deste projeto é como ele lida com o protocolo SRT para garantir que o seu Playout final não saia do ar devido a oscilações normais da rede.
-
-### 1. Injeção Automática de Parâmetros de Sobrevivência
-Quando você cola um link SRT simples (ex: `srt://192.168.1.100:25000`) na interface, o Node.js **intercepta** e turbina essa URL automaticamente antes de enviar para o FFmpeg. 
-Ele adiciona:
-- `?mode=caller`: Define quem inicia a conexão.
-- `&transtype=live`: O FFmpeg, por padrão, trata conexões SRT como transferência de arquivos. Se houver 1 único pacote perdido na rede Wi-Fi, ele aborta a conexão para não "corromper" o arquivo. A injeção de `live` diz ao FFmpeg para ignorar buracos e continuar tocando!
-- `&latency=1000000`: Cria um buffer massivo de 1 segundo (1000ms) no receptor para reordenar pacotes perdidos em redes sem fio muito ruins, absorvendo os "soluços" (jitters).
-
-### 2. Watchdog Inteligente (Anti-Zumbi)
-As conexões SRT, quando perdem o sinal abruptamente (ex: se o computador que está enviando for desligado puxando a tomada), podem fazer com que o FFmpeg fique "congelado" esperando um pacote que nunca virá.
-O nosso Node.js implementa um **Watchdog**: ele lê a saída padrão do FFmpeg milhares de vezes por minuto. Se o FFmpeg parar de reportar progresso por mais de `15 segundos`, o Node.js "assassina" brutalmente (SIGKILL) o processo zumbi e zera o estado, liberando o sistema para uma nova conexão limpa.
-
-### 3. Recuperação Anti-Cache do Player (HLS.js)
-Se o player de vídeo da WebUI tenta puxar o sinal antes do backend estar completamente pronto, o navegador (Chrome/Edge) pode guardar em cache um "Erro 404 (Não Encontrado)" e deixar a tela preta para sempre.
-Nós contornamos isso utilizando um mecanismo de cache-busting dinâmico no Javascript (`?t=timestamp`), o que força o player a destruir a si mesmo e renascer das cinzas tentando buscar a imagem verdadeira no servidor a cada 2 segundos até o sinal SRT se estabelecer com sucesso.
-
-### 4. Proteção contra Deadlocks (`tee` Muxer e UDP)
-O FFmpeg usa o muxer `tee` para dividir o sinal simultaneamente para o monitoramento (RTSP) e para a porta local de Playout. Se a porta de playout estivesse aguardando um handshake SRT, o FFmpeg congelaria a tela inteira de monitoramento. Para blindar isso, enviamos o sinal interno de saída como `udp://127.0.0.1:9100`. Como o UDP é do tipo "fire and forget" (atira e esquece), ele nunca trava o FFmpeg mesmo se não houver ninguém ouvindo a porta.
+```bash
+sudo /opt/srt-playout/update.sh
+```
+*Ou remotamente via curl:*
+```bash
+curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/update.sh | sudo bash -
+```
 
 ---
 
-## 🔧 Comandos Úteis de Manutenção
+### 🗑️ 3. Desinstalação Completa (Limpeza)
+Para remover completamente o servidor, encerrar processos e deletar serviços do Systemd:
 
-Após a instalação automática, o sistema roda silenciosamente em segundo plano, protegido pelo Kernel do Linux.
+```bash
+sudo /opt/srt-playout/uninstall.sh
+```
+*Ou remotamente via curl:*
+```bash
+curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/uninstall.sh | sudo bash -
+```
 
-Acesse o painel em: **`http://IP_DA_SUA_MAQUINA:3000`**
+---
 
-### Gerenciando a Aplicação
-- **Reiniciar o servidor inteiro:**
-  `sudo systemctl restart srt-webui`
-- **Parar a aplicação temporariamente:**
-  `sudo systemctl stop srt-webui`
+## 🌟 Principais Recursos e Arquitetura
 
-### Acompanhando os Logs Profissionais
-- **Ver logs gerais do Node.js (erros, alertas e prints do watchdog):**
-  `sudo journalctl -u srt-webui -f`
-- **Ver logs detalhados do MediaMTX:**
-  `sudo journalctl -u srt-mediamtx -f`
+### 1. Fallback em 3 Níveis com Auto-Recuperação
+- **Prioridade Dinâmica:** Entradas **MAIN (1)**, **SECUNDÁRIO (2)** e **TERCIÁRIO (3)**.
+- **Failover Automático:** Se o canal ativo perder dados por mais de 15 segundos, o Watchdog corta imediatamente para o **Slate (SMPTE Color Bars)** ou comuta para o próximo stream íntegro.
+- **Recuperação Prioritária:** Assim que o link principal (MAIN) volta a responder, o switcher reassume o sinal no ar instantaneamente, sem travamentos.
 
-*(Para sair da tela de logs, pressione `CTRL+C`).*
+### 2. Aceleração Gráfica por Hardware (GPU)
+- **Autodetecção Inteligente:** O backend detecta dinamicamente a GPU presente no sistema:
+  - **Intel QuickSync / VAAPI (iHD):** Aceleração nativa para processadores Intel Core (ex: Intel Iris Xe).
+  - **NVIDIA NVENC:** Habilitado para placas dedicadas NVIDIA (`h264_nvenc`).
+  - **CPU Software:** Fallback automático para `libx264` caso nenhuma GPU compatível esteja disponível.
+- **Eficiência Extrema:** O processamento com GPU eleva a velocidade de encode para **> 3.0x** com consumo mínimo de CPU, eliminando gargalos de processamento.
+
+### 3. Genlock Virtual e Saída Contínua a 59.94 FPS
+- **Sem Perdas Internas:** O transporte interno entre a recepção SRT e o encoder mestre utiliza fluxo por pipes com controle de *backpressure*, eliminando corrupção de pacotes por buffers UDP locais.
+- **Taxa Constante (CFR):** Saída padronizada em **1080p a 59.940 FPS** (`60000/1001`), o dobro uniforme de sinais 29.97p, prevenindo *judder* e engasgos de tempo.
+- **Ressincronização de Áudio:** Filtro `aresample` dinâmico que mantém áudio e vídeo alinhados mesmo durante comutações repentinas de entrada.
+
+### 4. Console WebUI Profissional (Dark Broadcast)
+- **Player com Retorno ao Vivo:** Reprodução HLS estável com fMP4 e controle manual.
+- **VU Meter Estéreo Vertical:** Medição em tempo real do áudio (Canais L e R) calibrada em **dB** (de `-60 dB` a `0 dB`) com alertas de saturação em amarelo/vermelho.
+- **Telemetria de Transmissão:** Indicadores em tempo real de `STATUS`, `CANAL ATIVO`, `SPEED`, `BITRATE` (formatado dinamicamente em Mbps), `DROP FRAMES` e `DUP FRAMES`.
+- **Card de GPU:** Exibe o chip gráfico ativo e o mecanismo de renderização (`VAAPI HW` / `NVENC HW` / `CPU`).
+- **Bloqueio de Porta:** Trava automática da porta SRT de saída durante o playout ativo.
+- **Controle de Saída HDMI:** Alternância instantânea de saída para monitor de vídeo local via hardware com indicação de status.
+
+---
+
+## 🛠️ Tratamento Técnico do Protocolo SRT
+
+O Node.js trata a conexão SRT antes de passá-la ao FFmpeg com parâmetros calibrados para resiliência:
+- `mode=caller`: Garante conexão bidirecional estável.
+- `transtype=live`: Força descarte de pacotes irreparáveis sem interromper o fluxo contínuo.
+- `latency=500000` (500 ms): Buffer ideal para recuperação por ARQ em conexões de internet e redes móveis.
+- `recv_buffer_size=8192000` & `fc=102400`: Janela ampliada de controle de fluxo para absorver picos de taxa de bits sem estouro de buffer do sistema operacional.
+
+---
+
+## 🔧 Comandos de Manutenção do Servidor
+
+Acesse o painel em: **`http://IP_DO_SERVIDOR:3000`**
+
+### Gerenciando os Serviços
+```bash
+# Reiniciar o servidor
+sudo systemctl restart srt-webui
+
+# Parar temporariamente
+sudo systemctl stop srt-webui
+
+# Checar status e consumo
+sudo systemctl status srt-webui
+```
+
+### Acompanhando Logs em Tempo Real
+```bash
+# Logs do Node.js (trocas de stream, GPU e watchdog)
+sudo journalctl -u srt-webui -f
+
+# Logs do MediaMTX (conexões SRT e HLS)
+sudo journalctl -u srt-mediamtx -f
+```

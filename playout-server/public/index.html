@@ -1,260 +1,635 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
-  <title>Playout — Controle</title>
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <meta charset="UTF-8">
+  <title>SRT Playout Pro</title>
   <style>
-    body { font-family: system-ui; background:#111; color:#eee; margin:20px; max-width: 800px; }
-    video { width:100%; background:#000; display:block; margin-bottom:12px; border-radius: 8px; }
-    .ok { color:#4ade80 } .bad { color:#f87171 } .warn { color:#facc15 }
-    button { padding:10px 16px; margin-right:6px; border:none; border-radius:4px; font-weight:bold; cursor:pointer; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 15px;
-      background: #1e1e24;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      border: 1px solid #333;
+    :root { 
+      --bg: #0b0f19; 
+      --panel: #131b2e; 
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #f8fafc; 
+      --text-muted: #94a3b8;
+      --acc: #38bdf8; 
+      --red: #f43f5e; 
+      --green: #10b981; 
+      --amber: #f59e0b;
+      --gray: #64748b; 
     }
-    .stat-box {
-      background: #2a2a35;
-      padding: 15px;
-      border-radius: 6px;
-      text-align: center;
-      border-left: 4px solid #4ade80;
-    }
-    .stat-title {
-      font-size: 12px;
-      color: #aaa;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 8px;
-    }
-    .stat-value {
-      font-size: 24px;
-      font-weight: bold;
-      color: #eee;
-    }
-    .stat-warning { border-left-color: #facc15; }
-    .stat-danger { border-left-color: #f87171; }
-    
-    .player-container {
-      position: relative;
-      width: 100%;
-      aspect-ratio: 16/9;
-      background: #000;
-      margin-bottom: 12px;
-      border-radius: 8px;
+    * { box-sizing: border-box; }
+    body { 
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+      background: var(--bg); 
+      color: var(--text); 
+      margin: 0; 
+      padding: 16px 20px; 
+      display: flex; 
+      flex-direction: column; 
+      height: 100vh; 
       overflow: hidden;
-      border: 2px solid #333;
     }
-    .color-bars {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: repeating-linear-gradient(90deg, 
-        #c0c0c0 0 14.28%, 
-        #c0c000 14.28% 28.56%, 
-        #00c0c0 28.56% 42.84%, 
-        #00c000 42.84% 57.12%, 
-        #c000c0 57.12% 71.4%, 
-        #c00000 71.4% 85.68%, 
-        #0000c0 85.68% 100%);
+    
+    .header { 
+      display: flex; 
+      justify-content: space-between; 
+      align-items: center; 
+      margin-bottom: 14px; 
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+    .header-brand { display: flex; align-items: center; gap: 10px; }
+    .header h1 { margin: 0; font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; color: #fff; }
+    .header h1 span { color: var(--acc); }
+    .header-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--acc);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+    }
+    .header-status { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; font-weight: 600; }
+    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gray); transition: background 0.3s, box-shadow 0.3s; }
+    .conn-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .conn-dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    
+    .main-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 390px; 
+      gap: 16px; 
+      flex: 1; 
+      min-height: 0; 
+    }
+    
+    .video-panel { 
+      background: #000; 
+      border-radius: 8px; 
+      overflow: hidden; 
+      position: relative; 
+      display: flex; 
+      flex-direction: row; 
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    video { flex: 1; width: 100%; object-fit: contain; background: #000; }
+    
+    /* Color Bars Placeholder */
+    .color-bars { position: absolute; inset: 0; display: flex; flex-direction: column; z-index: 10; }
+    .bars-top { flex: 7; display: flex; }
+    .bar { flex: 1; }
+    .c-w { background: #fff; } .c-y { background: #ff0; } .c-c { background: #0ff; }
+    .c-g { background: #0f0; } .c-m { background: #f0f; } .c-r { background: #f00; } .c-b { background: #00f; }
+    .bars-bottom { flex: 2; display: flex; }
+    .c-bk { background: #000; flex: 1;} .c-w2 { background: #fff; flex: 1;}
+    .c-bl { background: #001144; flex: 1;} .c-g2 { background: #222; flex: 1;}
+    .overlay-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.8); background: rgba(0,0,0,0.55); z-index: 11; letter-spacing: 0.04em;}
+    
+    /* VU Meter (vertical, à direita do vídeo) */
+    .video-area { flex: 1; position: relative; display: flex; min-width: 0; }
+    .vu-container { width: 62px; background: #070a13; border-left: 1px solid var(--panel-border); display: flex; flex-direction: column; align-items: center; padding: 10px 0 8px; gap: 6px; z-index: 12; }
+    .vu-body { flex: 1; display: flex; gap: 4px; width: 100%; justify-content: center; min-height: 0; }
+    .vu-scale { position: relative; width: 22px; color: #475569; font-size: 0.58rem; font-weight: 700; font-family: monospace; }
+    .vu-scale span { position: absolute; right: 0; transform: translateY(-50%); }
+    .vu-bar { width: 10px; height: 100%; background: linear-gradient(0deg, #10b981 0%, #10b981 70%, #eab308 70%, #eab308 90%, #ef4444 90%, #ef4444 100%); border-radius: 2px; position: relative; overflow: hidden; }
+    .vu-mask { position: absolute; left: 0; top: 0; width: 100%; height: 100%; background: #0f172a; transition: height 0.05s linear; }
+    .vu-labels { display: flex; gap: 4px; padding-left: 26px; }
+    .vu-label { color: #94a3b8; font-size: 0.68rem; font-weight: 800; width: 10px; text-align: center; }
+
+    /* Painel de Controles */
+    .controls-panel { display: flex; flex-direction: column; gap: 14px; overflow-y: auto; padding-right: 2px; }
+    .box { 
+      background: var(--panel); 
+      padding: 14px 16px; 
+      border-radius: 8px; 
+      border: 1px solid var(--panel-border);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    }
+    .box h3 { 
+      margin: 0 0 12px 0; 
+      font-size: 0.78rem; 
+      font-weight: 800; 
+      letter-spacing: 0.06em; 
+      text-transform: uppercase; 
+      color: #94a3b8;
+    }
+    
+    .input-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .input-row label { width: 48px; font-weight: 800; font-size: 0.78rem; color: #cbd5e1; letter-spacing: 0.04em; }
+    .input-row input { 
+      flex: 1; 
+      min-width: 0; 
+      padding: 7px 10px; 
+      border-radius: 6px; 
+      border: 1px solid #334155; 
+      background: #090e1a; 
+      color: #f8fafc; 
+      font-family: monospace; 
+      font-size: 0.82rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .input-row input:focus { 
+      outline: none; 
+      border-color: var(--acc); 
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2); 
+    }
+    .input-row input:disabled { opacity: 0.5; cursor: not-allowed; background: #0f172a; }
+    
+    .status-light { width: 10px; height: 10px; border-radius: 50%; background: var(--gray); transition: all 0.2s; flex-shrink: 0; }
+    .status-light.green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .status-light.red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+    .status-light.active { border: 2px solid #fff; transform: scale(1.25); }
+
+    .port-row { 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      background: rgba(9, 14, 26, 0.6); 
+      padding: 8px 12px; 
+      border-radius: 6px; 
+      border: 1px solid var(--panel-border);
+      margin-top: 10px;
+      margin-bottom: 12px;
+    }
+    .port-row label { font-size: 0.78rem; font-weight: 700; color: #cbd5e1; flex: 1; }
+    .port-row input { 
+      width: 72px; 
+      padding: 5px 8px; 
+      text-align: center; 
+      font-weight: 800; 
+      font-family: monospace; 
+      font-size: 0.9rem;
+      border-radius: 4px;
+      border: 1px solid #334155;
+      background: #090e1a;
+      color: #f8fafc;
+    }
+    .lock-icon { font-size: 1.1rem; }
+
+    button { 
+      padding: 10px 14px; 
+      font-size: 0.92rem; 
+      font-weight: 800; 
+      letter-spacing: 0.02em; 
+      border: none; 
+      border-radius: 6px; 
+      cursor: pointer; 
+      transition: all 0.15s ease; 
+      color: #fff; 
+    }
+    button:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; transform: none; }
+    
+    #btnStart { background: var(--green); color: #022c22; width: 100%; margin-bottom: 8px; }
+    #btnStop { background: var(--red); color: #fff; width: 100%; }
+    #btnHdmi { 
+      background: var(--acc); 
+      color: #0b0f19; 
+      width: 100%; 
+      margin-top: 10px; 
+      font-size: 0.88rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      padding: 10px;
+    }
+
+    /* Grid de Estatísticas Polido e sem Vazamentos */
+    .stats-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 8px; 
+    }
+    .stat-box { 
+      background: rgba(9, 14, 26, 0.7); 
+      padding: 8px 10px; 
+      border-radius: 6px; 
+      border: 1px solid var(--panel-border);
+      min-width: 0; /* Impede vazamento de grid */
       display: flex;
-      align-items: center;
+      flex-direction: column;
       justify-content: center;
-      z-index: 10;
     }
-    .color-bars-text {
-      background: rgba(0,0,0,0.8);
-      padding: 15px 30px;
-      border-radius: 8px;
-      color: white;
-      font-weight: bold;
-      letter-spacing: 2px;
-      font-size: 1.5rem;
+    .stat-label { 
+      color: #64748b; 
+      font-size: 0.65rem; 
+      font-weight: 700; 
+      letter-spacing: 0.05em; 
+      text-transform: uppercase; 
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    video {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      display: none;
-      z-index: 5;
+    .stat-val { 
+      font-weight: 800; 
+      font-size: 0.95rem; 
+      font-family: 'JetBrains Mono', monospace; 
+      white-space: nowrap; 
+      overflow: hidden; 
+      text-overflow: ellipsis; 
+      color: #f1f5f9;
+      line-height: 1.2;
+    }
+    .stat-span-2 { grid-column: span 2; }
+    
+    .gpu-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .gpu-name-text {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+    }
+    .gpu-badge {
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 4px;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .gpu-badge.hw-on {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+    .gpu-badge.hw-off {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.35);
     }
   </style>
 </head>
 <body>
-  <h2>Preview (já tratado)</h2>
-  
-  <div class="player-container">
-    <div id="placeholder" class="color-bars">
-      <div class="color-bars-text">AGUARDANDO SINAL SRT</div>
+  <div class="header">
+    <div class="header-brand">
+      <h1>SRT <span>Playout Pro</span></h1>
+      <span class="header-badge">Broadcast Core</span>
     </div>
-    <video id="v" controls muted autoplay></video>
-  </div>
-
-  <h2>Estatísticas de Playout</h2>
-  <div class="stats-grid">
-    <div class="stat-box" id="box-speed">
-      <div class="stat-title">Velocidade</div>
-      <div class="stat-value" id="val-speed">-</div>
-    </div>
-    <div class="stat-box stat-danger" id="box-drop">
-      <div class="stat-title">Pacotes Descartados</div>
-      <div class="stat-value" id="val-drop">0</div>
-    </div>
-    <div class="stat-box stat-warning" id="box-dup">
-      <div class="stat-title">Quadros Duplicados (Sync)</div>
-      <div class="stat-value" id="val-dup">0</div>
+    <div class="header-status">
+      <div id="connDot" class="conn-dot"></div>
+      <div id="connectionStatus" style="color: var(--gray);">Conectando UI...</div>
     </div>
   </div>
 
-  <h2>Configuração de Entrada</h2>
-  <div style="margin-bottom: 15px;">
-    <input type="text" id="srtUrl" placeholder="srt://0.0.0.0:9000?mode=listener" style="width: 400px; padding: 10px; border-radius:4px; border:1px solid #444; background:#222; color:#fff;" />
-    <span id="urlError" class="bad" style="display:none; margin-left:10px;">URL SRT inválida!</span>
+  <div class="main-grid">
+    <!-- VÍDEO -->
+    <div class="video-panel">
+      <div class="video-area">
+        <div class="color-bars" id="placeholder">
+          <div class="bars-top">
+            <div class="bar c-w"></div><div class="bar c-y"></div><div class="bar c-c"></div>
+            <div class="bar c-g"></div><div class="bar c-m"></div><div class="bar c-r"></div><div class="bar c-b"></div>
+          </div>
+          <div class="bars-bottom">
+            <div class="c-bk"></div><div class="c-w2"></div><div class="c-bl"></div><div class="c-g2"></div>
+          </div>
+          <div class="overlay-text" id="overlayText">AGUARDANDO SINAL SRT</div>
+        </div>
+        <video id="video" crossorigin="anonymous" controls muted playsinline style="display:none;"></video>
+      </div>
+      <div class="vu-container" id="vuMeter">
+        <div class="vu-body">
+          <div class="vu-scale">
+            <span style="top:0%">0</span><span style="top:10%">-6</span><span style="top:20%">-12</span>
+            <span style="top:30%">-18</span><span style="top:40%">-24</span><span style="top:60%">-36</span>
+            <span style="top:80%">-48</span><span style="top:100%">-60</span>
+          </div>
+          <div class="vu-bar"><div class="vu-mask" id="maskL"></div></div>
+          <div class="vu-bar"><div class="vu-mask" id="maskR"></div></div>
+        </div>
+        <div class="vu-labels"><span class="vu-label">L</span><span class="vu-label">R</span></div>
+      </div>
+    </div>
+
+    <!-- CONTROLES -->
+    <div class="controls-panel">
+      <div class="box">
+        <h3>Entradas SRT (Prioridade Descrescente)</h3>
+        
+        <div class="input-row">
+          <div class="status-light" id="light0" title="Main"></div>
+          <label>MAIN</label>
+          <input type="text" id="url0" placeholder="srt://ip:porta">
+        </div>
+        
+        <div class="input-row">
+          <div class="status-light" id="light1" title="Stream 2 (Secundário)"></div>
+          <label>SEC</label>
+          <input type="text" id="url1" placeholder="srt://ip:porta">
+        </div>
+        
+        <div class="input-row">
+          <div class="status-light" id="light2" title="Stream 3 (Terciário)"></div>
+          <label>TERT</label>
+          <input type="text" id="url2" placeholder="srt://ip:porta">
+        </div>
+
+        <div class="port-row">
+          <label style="flex:1;">Porta de Saída (Listener):</label>
+          <input type="number" id="outPort" value="9000">
+          <span class="lock-icon" id="portLock">🔓</span>
+        </div>
+
+        <button id="btnStart" onclick="startStream()">Iniciar Playout</button>
+        <button id="btnStop" onclick="stopStream()" disabled>Parar Tudo</button>
+      </div>
+
+      <div class="box">
+        <h3>Estatísticas Internas</h3>
+        <div class="stats-grid">
+          <div class="stat-box"><div class="stat-label">STATUS</div><div class="stat-val" id="stStatus">STOPPED</div></div>
+          <div class="stat-box"><div class="stat-label">CANAL ATIVO</div><div class="stat-val" id="stActive">-</div></div>
+          <div class="stat-box"><div class="stat-label">SPEED</div><div class="stat-val" id="stSpeed">--</div></div>
+          <div class="stat-box"><div class="stat-label">BITRATE</div><div class="stat-val" id="stBitrate">--</div></div>
+          <div class="stat-box"><div class="stat-label">DROP FRAMES</div><div class="stat-val" id="stDrop" style="color:var(--red)">0</div></div>
+          <div class="stat-box"><div class="stat-label">DUP FRAMES</div><div class="stat-val" id="stDup" style="color:var(--acc)">0</div></div>
+          <div class="stat-box stat-span-2">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span class="stat-label" style="margin:0;">ACELERAÇÃO / GPU</span>
+              <span class="gpu-badge hw-on" id="stHwBadge">ACELERAÇÃO POR GPU</span>
+            </div>
+            <div class="gpu-row">
+              <span class="gpu-name-text" id="stGpuName">--</span>
+              <span class="stat-val" id="stRenderer" style="font-size:0.8rem; color:var(--green); font-family:monospace; margin:0;">--</span>
+            </div>
+          </div>
+        </div>
+        <button id="btnHdmi" onclick="toggleHdmi()">SAÍDA HDMI: DESLIGADA</button>
+      </div>
+    </div>
   </div>
 
-  <div style="margin-bottom: 20px;">
-    <button id="btnStart" onclick="startStream()">Iniciar Stream</button>
-    <button id="btnStop" onclick="stopStream()">Parar Stream</button>
-    <button id="btnHdmi" onclick="toggleHdmi()" style="background:#3b82f6; color:#fff; float:right;">Ligar Saída HDMI (ffplay)</button>
-  </div>
-
-  <h2>Log de Sistema</h2>
-  <pre id="st" style="background:#000; padding:10px; border-radius:4px; color:#aaa;">conectando...</pre>
-
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   <script>
-    let isHdmiOn = false;
+    const v = document.getElementById('video');
+    const placeholder = document.getElementById('placeholder');
+    const overlayText = document.getElementById('overlayText');
+    const btnStart = document.getElementById('btnStart');
+    const btnStop = document.getElementById('btnStop');
+    const btnHdmi = document.getElementById('btnHdmi');
+    const outPort = document.getElementById('outPort');
+    const portLock = document.getElementById('portLock');
+    
+    let hls = null;
+    let isRunning = false;
 
-    function toggleHdmi() {
-      isHdmiOn = !isHdmiOn;
-      fetch('/api/hdmi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable: isHdmiOn })
+    // Load configs
+    fetch('/api/settings').then(r=>r.json()).then(cfg => {
+      document.getElementById('url0').value = cfg.urls[0] || '';
+      document.getElementById('url1').value = cfg.urls[1] || '';
+      document.getElementById('url2').value = cfg.urls[2] || '';
+      outPort.value = cfg.outputPort || 9000;
+      
+      // Auto-stop na inicialização para garantir que os campos fiquem livres
+      fetch('/api/stop', { method: 'POST' });
+    });
+
+    function saveConfig() {
+      if (isRunning) return; // bloqueado
+      fetch('/api/settings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urls: [
+            document.getElementById('url0').value,
+            document.getElementById('url1').value,
+            document.getElementById('url2').value
+          ],
+          outputPort: outPort.value
+        })
       });
     }
 
-    function startStream() {
-      const urlInput = document.getElementById('srtUrl').value.trim();
-      const errorSpan = document.getElementById('urlError');
-      const srtRegex = /^srt:\/\/[a-zA-Z0-9.-]+:\d+(\?.*)?$/;
-      if (!srtRegex.test(urlInput)) {
-        errorSpan.style.display = 'inline';
-        return;
+    // Auto-save when typing
+    ['url0', 'url1', 'url2', 'outPort'].forEach(id => {
+      document.getElementById(id).addEventListener('change', saveConfig);
+    });
+
+    function initPlayer() {
+      if (hls) { hls.destroy(); hls = null; }
+      const src = "http://" + location.hostname + ":8888/live/index.m3u8?t=" + Date.now();
+      
+      if (Hls.isSupported()) {
+        hls = new Hls({ lowLatencyMode: true });
+        hls.loadSource(src);
+        hls.attachMedia(v);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          // Play manual pelo usuário (controls habilitados na tag de vídeo)
+        });
+        hls.on(Hls.Events.ERROR, (e, data) => {
+          if (data.fatal) setTimeout(initPlayer, 2000);
+        });
       }
-      errorSpan.style.display = 'none';
-      fetch('/api/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inputUrl: urlInput })
-      });
-      setTimeout(initPlayer, 1000);
+    }
+
+    function startStream() {
+      saveConfig();
+      fetch('/api/start', { method: 'POST' });
+      setTimeout(initPlayer, 2000);
     }
 
     function stopStream() {
       fetch('/api/stop', { method: 'POST' });
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
-    }
-
-    const src = `http://${location.hostname}:8888/live/index.m3u8`;
-    const v = document.getElementById('v');
-    let hls = null;
-
-    function initPlayer() {
       if (hls) { hls.destroy(); hls = null; }
-      
-      const noCacheSrc = src + '?t=' + Date.now();
-      
-      if (Hls.isSupported()) {
-        hls = new Hls({ lowLatencyMode: true });
-        hls.loadSource(noCacheSrc);
-        hls.attachMedia(v);
-        
-        hls.on(Hls.Events.MANIFEST_PARSED, function() {
-          v.play().catch(e => console.log("Autoplay prevented:", e));
-        });
-        
-        hls.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) {
-            switch (data.type) {
-              case Hls.ErrorTypes.NETWORK_ERROR:
-                // Cache-busting para evitar que o navegador memorize o erro 404
-                setTimeout(initPlayer, 2000);
-                break;
-              case Hls.ErrorTypes.MEDIA_ERROR:
-                hls.recoverMediaError();
-                break;
-              default:
-                setTimeout(initPlayer, 2000);
-                break;
-            }
-          }
-        });
-      } else {
-        v.src = noCacheSrc;
-        v.play().catch(e => console.log("Autoplay prevented:", e));
-      }
     }
 
-    const ws = new WebSocket(`ws://${location.host}`);
-    const btnStart = document.getElementById('btnStart');
-    const btnStop = document.getElementById('btnStop');
-    const btnHdmi = document.getElementById('btnHdmi');
-    const placeholder = document.getElementById('placeholder');
+    function toggleHdmi() {
+      fetch('/api/hdmi', { method: 'POST' });
+    }
 
+    // WebSocket Updates
+    const ws = new WebSocket(`ws://${location.host}`);
+    const connStatus = document.getElementById('connectionStatus');
+    const connDot = document.getElementById('connDot');
+
+    ws.onopen = () => {
+      connStatus.textContent = 'Conectado';
+      connDot.className = 'conn-dot online';
+    };
+    ws.onclose = () => {
+      connStatus.textContent = 'Desconectado';
+      connDot.className = 'conn-dot offline';
+    };
+    
     ws.onmessage = (e) => {
       const s = JSON.parse(e.data);
+      isRunning = s.status === 'running';
+
+      // Lock/Unlock Inputs
+      const lockFields = ['url0', 'url1', 'url2', 'outPort'];
+      lockFields.forEach(id => document.getElementById(id).disabled = isRunning);
       
-      document.getElementById('st').textContent =
-        `status:   ${s.status}\n` +
-        `reinícios:${s.restarts}\n` +
-        `bitrate:  ${s.bitrate || 'N/A'}\n` +
-        `freeze:   ${s.freeze}\n` +
-        `black:    ${s.black}`;
-
-      document.getElementById('val-speed').textContent = s.speed || '-';
-      document.getElementById('val-drop').textContent = s.drop || '0';
-      document.getElementById('val-dup').textContent = s.dup || '0';
-      
-      isHdmiOn = s.hdmi;
-      btnHdmi.innerText = isHdmiOn ? 'Desligar Saída HDMI' : 'Ligar Saída HDMI (ffplay)';
-      btnHdmi.style.backgroundColor = isHdmiOn ? '#ef4444' : '#3b82f6';
-
-      if (s.status === 'stopped') {
-        // Exibir Color Bars
-        v.style.display = 'none';
-        placeholder.style.display = 'flex';
-
-        btnStart.style.backgroundColor = '#4ade80';
-        btnStart.style.color = '#111';
-        btnStart.innerText = 'Iniciar Stream';
-        btnStart.disabled = false;
+      if (isRunning) {
+        if (!hls) {
+          initPlayer();
+        }
         
-        btnStop.style.backgroundColor = '#555';
-        btnStop.style.color = '#aaa';
-        btnStop.disabled = true;
-      } else {
-        // Exibir Vídeo
+        portLock.textContent = '🔒';
+        portLock.style.color = 'var(--red)';
+        btnStart.style.backgroundColor = 'var(--gray)';
+        btnStart.disabled = true;
+        btnStop.style.backgroundColor = 'var(--red)';
+        btnStop.disabled = false;
+        
         v.style.display = 'block';
         placeholder.style.display = 'none';
 
-        btnStart.style.backgroundColor = '#555';
-        btnStart.style.color = '#aaa';
-        btnStart.innerText = s.status === 'starting' || s.status === 'restarting' ? 'Conectando...' : 'Trocar SRT';
+        if (s.activeInput === -1) {
+          // Em modo slate
+          v.style.display = 'none';
+          placeholder.style.display = 'flex';
+          overlayText.textContent = "FALLBACK ATIVADO (SLATE)";
+        }
+      } else {
+        portLock.textContent = '🔓';
+        portLock.style.color = 'var(--green)';
+        btnStart.style.backgroundColor = 'var(--green)';
+        btnStart.disabled = false;
+        btnStop.style.backgroundColor = 'var(--gray)';
+        btnStop.disabled = true;
         
-        btnStop.style.backgroundColor = '#f87171';
-        btnStop.style.color = '#111';
-        btnStop.disabled = false;
+        v.style.display = 'none';
+        placeholder.style.display = 'flex';
+        overlayText.textContent = "AGUARDANDO SINAL SRT";
+      }
+
+      // Update Lights
+      for (let i = 0; i < 3; i++) {
+        const light = document.getElementById('light'+i);
+        light.className = 'status-light';
+        if (s.health[i]) light.classList.add('green');
+        else if (isRunning) light.classList.add('red');
+        
+        if (isRunning && s.activeInput === i) {
+          light.classList.add('active');
+        }
+      }
+
+      // Update Stats
+      document.getElementById('stStatus').textContent = s.status.toUpperCase();
+      document.getElementById('stActive').textContent = s.activeInput === -1 ? 'SLATE' : `STREAM ${s.activeInput + 1}`;
+      document.getElementById('stSpeed').textContent = s.stats.speed;
+      
+      // Formatação inteligente de Bitrate (evita overflow de texto)
+      let b = s.stats.bitrate;
+      if (b && b !== 'N/A' && b !== '--') {
+        const m = b.match(/([\d.]+)\s*kbits/i);
+        if (m) {
+          const kbps = parseFloat(m[1]);
+          b = kbps >= 1000 ? (kbps / 1000).toFixed(2) + ' Mbps' : Math.round(kbps) + ' kbps';
+        }
+      }
+      const stBitrateEl = document.getElementById('stBitrate');
+      stBitrateEl.textContent = b || '--';
+      stBitrateEl.title = s.stats.bitrate || '';
+
+      document.getElementById('stDrop').textContent = s.stats.drop;
+      document.getElementById('stDup').textContent = s.stats.dup;
+      
+      if (s.gpu) {
+        const gpuEl = document.getElementById('stGpuName');
+        const rendEl = document.getElementById('stRenderer');
+        const badgeEl = document.getElementById('stHwBadge');
+        if (gpuEl) {
+          gpuEl.textContent = s.gpu.name || 'N/A';
+          gpuEl.title = s.gpu.name || '';
+        }
+        if (rendEl) {
+          let cleanRend = s.gpu.renderer || 'CPU Software';
+          if (cleanRend.includes('(VAAPI HW)')) cleanRend = 'VAAPI (HW)';
+          else if (cleanRend.includes('(NVENC HW)')) cleanRend = 'NVENC (HW)';
+          else if (cleanRend.includes('libx264')) cleanRend = 'libx264 (CPU)';
+          rendEl.textContent = cleanRend;
+          rendEl.title = s.gpu.renderer || '';
+        }
+        if (badgeEl) {
+          badgeEl.textContent = s.gpu.hardware ? 'ACELERAÇÃO POR GPU' : 'SOFTWARE (CPU)';
+          badgeEl.className = 'gpu-badge ' + (s.gpu.hardware ? 'hw-on' : 'hw-off');
+        }
+      }
+      
+      if (s.hdmi) {
+        btnHdmi.textContent = 'SAÍDA HDMI: LIGADA';
+        btnHdmi.style.backgroundColor = 'var(--red)';
+        btnHdmi.style.color = '#ffffff';
+      } else {
+        btnHdmi.textContent = 'SAÍDA HDMI: DESLIGADA';
+        btnHdmi.style.backgroundColor = 'var(--acc)';
+        btnHdmi.style.color = '#0b0f19';
       }
     };
+    
+    // --- VU METER LOGIC ---
+    let audioCtx, analyserL, analyserR, source, splitter;
+    const maskL = document.getElementById('maskL');
+    const maskR = document.getElementById('maskR');
+
+    function initAudioMeter() {
+      if (audioCtx) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        source = audioCtx.createMediaElementSource(v);
+        splitter = audioCtx.createChannelSplitter(2);
+        analyserL = audioCtx.createAnalyser();
+        analyserR = audioCtx.createAnalyser();
+        
+        analyserL.smoothingTimeConstant = 0.8;
+        analyserR.smoothingTimeConstant = 0.8;
+        analyserL.fftSize = 256;
+        analyserR.fftSize = 256;
+
+        source.connect(splitter);
+        splitter.connect(analyserL, 0);
+        splitter.connect(analyserR, 1);
+        source.connect(audioCtx.destination);
+        
+        updateMeter();
+      } catch (e) {
+        console.error("Audio Context falhou:", e);
+      }
+    }
+
+    function getDB(analyser) {
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteTimeDomainData(data);
+      let sum = 0;
+      for(let i=0; i<data.length; i++) {
+        const val = (data[i] - 128) / 128;
+        sum += val * val;
+      }
+      const rms = Math.sqrt(sum / data.length);
+      if (rms === 0) return -60;
+      let db = 20 * Math.log10(rms);
+      return Math.max(-60, Math.min(0, db));
+    }
+
+    function updateMeter() {
+      requestAnimationFrame(updateMeter);
+      const dbL = getDB(analyserL);
+      const dbR = getDB(analyserR);
+      
+      // -60dB -> 100% mask width (hidden)
+      // 0dB -> 0% mask width (fully visible)
+      const pctL = Math.max(0, Math.min(100, ((dbL + 60) / 60) * 100));
+      const pctR = Math.max(0, Math.min(100, ((dbR + 60) / 60) * 100));
+      
+      maskL.style.height = (100 - pctL) + '%';
+      maskR.style.height = (100 - pctR) + '%';
+    }
+
+    v.addEventListener('play', initAudioMeter);
   </script>
 </body>
 </html>
