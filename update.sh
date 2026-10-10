@@ -41,8 +41,26 @@ fi
 # Assegura que os scripts auxiliares tenham permissão de execução
 chmod +x "$TARGET_DIR"/*.sh 2>/dev/null || true
 
-# Garante drivers de GPU VAAPI se faltarem
-apt-get install -y intel-media-va-driver-non-free 2>/dev/null || apt-get install -y intel-media-va-driver 2>/dev/null || true
+# Garante drivers de GPU adequados para o hardware detectado (Intel, AMD, NVIDIA)
+GPU_PCI=$(lspci 2>/dev/null | grep -iE "vga|3d|display" || true)
+
+if echo "$GPU_PCI" | grep -qiE "\b(Intel)\b"; then
+    dpkg -l | grep -qE "intel-media-va-driver|iHD_drv_video" || apt-get install -y intel-media-va-driver-non-free 2>/dev/null || apt-get install -y intel-media-va-driver 2>/dev/null || true
+fi
+
+if echo "$GPU_PCI" | grep -qiE "\b(AMD|ATI|Radeon)\b"; then
+    dpkg -l | grep -qE "mesa-va-drivers|radeonsi_drv_video" || apt-get install -y mesa-va-drivers 2>/dev/null || apt-get install -y va-driver-all 2>/dev/null || true
+fi
+
+if echo "$GPU_PCI" | grep -qiE "\b(NVIDIA)\b"; then
+    if ! command -v nvidia-smi >/dev/null 2>&1; then
+        if command -v ubuntu-drivers >/dev/null 2>&1; then
+            ubuntu-drivers install --gpgpu 2>/dev/null || ubuntu-drivers install 2>/dev/null || true
+        fi
+        apt-get install -y libnvidia-encode-1 2>/dev/null || true
+    fi
+fi
+apt-get install -y vainfo libva2 2>/dev/null || true
 
 echo "[4/5] Reiniciando serviços do sistema..."
 systemctl daemon-reload

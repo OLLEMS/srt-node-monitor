@@ -17,7 +17,7 @@ curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/install.
 
 O instalador automático:
 - Instala Node.js 20 LTS e dependências nativas (`ffmpeg`, `git`, `curl`, `wget`).
-- Instala drivers de aceleração por GPU (`intel-media-va-driver-non-free`).
+- Detecta automaticamente a GPU do sistema (**Intel**, **AMD** ou **NVIDIA**) e instala os drivers e bibliotecas necessários.
 - Clona a aplicação para `/opt/srt-playout`.
 - Baixa e configura o binário de alto desempenho do **MediaMTX** (RTSP/HLS fMP4).
 - Configura e ativa os serviços do sistema (`srt-webui.service` e `srt-mediamtx.service`).
@@ -58,11 +58,12 @@ curl -sL https://raw.githubusercontent.com/OLLEMS/srt-node-monitor/main/uninstal
 - **Failover Automático:** Se o canal ativo perder dados por mais de 15 segundos, o Watchdog corta imediatamente para o **Slate (SMPTE Color Bars)** ou comuta para o próximo stream íntegro.
 - **Recuperação Prioritária:** Assim que o link principal (MAIN) volta a responder, o switcher reassume o sinal no ar instantaneamente, sem travamentos.
 
-### 2. Aceleração Gráfica por Hardware (GPU)
-- **Autodetecção Inteligente:** O backend detecta dinamicamente a GPU presente no sistema:
-  - **Intel QuickSync / VAAPI (iHD):** Aceleração nativa para processadores Intel Core (ex: Intel Iris Xe).
-  - **NVIDIA NVENC:** Habilitado para placas dedicadas NVIDIA (`h264_nvenc`).
-  - **CPU Software:** Fallback automático para `libx264` caso nenhuma GPU compatível esteja disponível.
+### 2. Aceleração Gráfica por Hardware Multi-GPU (Intel, AMD e NVIDIA)
+- **Autodetecção Inteligente de Hardware e Drivers:** O script de instalação e o backend detectam a fabricante da GPU no barramento PCI e aplicam a melhor tecnologia de aceleração disponível:
+  - **Intel QuickSync / VAAPI (iHD):** Suporte nativo para gráficos integrados e dedicados Intel (Intel HD, UHD, Iris Xe, Intel Arc) via driver `intel-media-va-driver-non-free`.
+  - **AMD Radeon / VAAPI (Mesa):** Suporte para GPUs dedicadas Radeon (RX 5000/6000/7000, Vega) e APUs Ryzen via driver `mesa-va-drivers` / Gallium `radeonsi`.
+  - **NVIDIA NVENC:** Habilitado para placas dedicadas NVIDIA (GeForce, RTX, Quadro, Tesla) via `h264_nvenc` e drivers proprietários.
+  - **CPU Software:** Fallback transparente para `libx264` caso nenhuma GPU compatível esteja presente.
 - **Eficiência Extrema:** O processamento com GPU eleva a velocidade de encode para **> 3.0x** com consumo mínimo de CPU, eliminando gargalos de processamento.
 
 ### 3. Genlock Virtual e Saída Contínua a 59.94 FPS

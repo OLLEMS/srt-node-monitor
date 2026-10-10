@@ -58,11 +58,13 @@ const CFG = {
 // --- DETECÇÃO DE GPU E ACELERAÇÃO POR HARDWARE ---
 function detectGpuAndEncoder() {
   let gpuName = 'CPU Integrada';
+  let pci = '';
   try {
-    const pci = execSync('lspci 2>/dev/null | grep -iE "vga|3d|display"', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    pci = execSync('lspci 2>/dev/null | grep -iE "vga|3d|display"', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
     const m = pci.match(/\[(.*?)\]/);
     if (m) {
-      gpuName = (pci.includes('Intel') ? 'Intel ' : (pci.includes('NVIDIA') ? 'NVIDIA ' : (pci.includes('AMD') ? 'AMD ' : ''))) + m[1];
+      const brand = /\b(Intel)\b/i.test(pci) ? 'Intel ' : (/\b(NVIDIA)\b/i.test(pci) ? 'NVIDIA ' : (/\b(AMD|ATI|Radeon)\b/i.test(pci) ? 'AMD ' : ''));
+      gpuName = brand + m[1];
     } else {
       const parts = pci.split(': ');
       gpuName = parts[parts.length - 1] || pci;
